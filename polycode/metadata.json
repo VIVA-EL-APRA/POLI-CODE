@@ -1,0 +1,8 @@
+{
+  "name": "PolyCode",
+  "description": "Traductor de código automático entre Python y JavaScript con visualización de pipeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
