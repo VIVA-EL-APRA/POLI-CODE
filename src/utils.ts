@@ -1,65 +1,65 @@
 import { Language } from './types';
 
-/**
- * Perform elegant client-side regex-based syntax highlighting for dark-mode.
- */
 export function highlightCode(code: string, lang: Language): string {
   if (!code) return '';
 
-  // 1. Double escape HTML characters to prevent XSS and rendering errors
-  let html = code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-  // 2. Highlighting Comments
-  if (lang === 'Python') {
-    html = html.replace(/(#.*)$/gm, '<span class="hl-comment">$1</span>');
-    // Multi-line docstrings as comments
-    html = html.replace(/(""";[\s\S]*?""")|("""[\s\S]*?""")|(\'\'\'[\s\S]*?\'\'\')/g, '<span class="hl-comment">$1</span>');
-  } else {
-    // Single line JS comments
-    html = html.replace(/(\/\/.*)$/gm, '<span class="hl-comment">$1</span>');
-    // Multi-line header doc comments
-    html = html.replace(/(\/\*\*[\s\S]*?\*\/|\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>');
-  }
-
-  // 3. Highlighting Strings (without overriding comments)
-  // Match normal strings that are not surrounded by comment tags
-  html = html.replace(/(["'`])(.*?)\1/g, '<span class="hl-string">$1$2$1</span>');
-
-  // 4. Highlighting Keywords
-  const pyKeywords = [
-    'def', 'class', 'if', 'elif', 'else', 'for', 'while', 'import', 'from', 'as', 
-    'print', 'sum', 'len', 'and', 'or', 'not', 'in', 'return', 'None', 'True', 'False',
-    'try', 'except', 'finally', 'with', 'lambda', 'pass', 'break', 'continue', 'yield'
-  ];
+  // Split into lines and process each
+  const lines = code.split('\n');
   
-  const jsKeywords = [
-    'function', 'const', 'let', 'var', 'constructor', 'new', 'console', 'log', 
-    'reduce', 'filter', 'map', 'return', 'if', 'else', 'for', 'while', 'import', 
-    'export', 'default', 'true', 'false', 'null', 'undefined', 'class', 'this',
-    'try', 'catch', 'finally', 'async', 'await', 'switch', 'case', 'break', 'continue'
-  ];
+  const processLine = (line: string): string => {
+    // Escape HTML first
+    line = line
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
-  const keywordsList = lang === 'Python' ? pyKeywords : jsKeywords;
-  
-  // Highlighting key functions & keywords
-  const kwRegex = new RegExp(`\\b(${keywordsList.join('|')})\\b`, 'g');
-  html = html.replace(kwRegex, (match) => `<span class="hl-keyword">${match}</span>`);
+    // Comments (full line takes priority)
+    if (lang === 'Python' && /^\s*#/.test(line)) {
+      return `<span class="hl-comment">${line}</span>`;
+    }
+    if (lang === 'JavaScript' && /^\s*\/\//.test(line)) {
+      return `<span class="hl-comment">${line}</span>`;
+    }
 
-  // 5. Highlighting Numbers
-  html = html.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="hl-number">$1</span>');
+    // Strings - replace with placeholder to avoid double processing
+    const stringPlaceholders: string[] = [];
+    line = line.replace(/(["'`])((?:\\.|(?!\1)[^\\])*)\1/g, (match) => {
+      const idx = stringPlaceholders.length;
+      stringPlaceholders.push(`<span class="hl-string">${match}</span>`);
+      return `\x00STR${idx}\x00`;
+    });
 
-  // 6. Highlighting function invocations (words followed by parenthesis)
-  html = html.replace(/\b([a-zA-Z_]\w*)(?=\()/g, '<span class="hl-func">$1</span>');
+    // Keywords
+    const pyKeywords = ['def','class','if','elif','else','for','while','import','from',
+      'as','return','None','True','False','try','except','finally','with','lambda',
+      'pass','break','continue','yield','and','or','not','in','print','len','range'];
+    const jsKeywords = ['function','const','let','var','return','if','else','for',
+      'while','import','export','default','true','false','null','undefined','class',
+      'this','try','catch','finally','async','await','switch','case','break',
+      'continue','new','typeof','instanceof'];
 
-  return html;
+    const keywords = lang === 'Python' ? pyKeywords : jsKeywords;
+    const kwRegex = new RegExp(`\\b(${keywords.join('|')})\\b`, 'g');
+    line = line.replace(kwRegex, '<span class="hl-keyword">$1</span>');
+
+    // Numbers
+    line = line.replace(/\b(\d+(\.\d+)?)\b/g, '<span class="hl-number">$1</span>');
+
+    // Function calls
+    line = line.replace(/\b([a-zA-Z_]\w*)(?=\()/g, (match, name) => {
+      if (keywords.includes(name)) return match;
+      return `<span class="hl-func">${name}</span>`;
+    });
+
+    // Restore strings
+    line = line.replace(/\x00STR(\d+)\x00/g, (_, idx) => stringPlaceholders[parseInt(idx)]);
+
+    return line;
+  };
+
+  return lines.map(processLine).join('\n');
 }
 
-/**
- * Format timestamps into Spanish readable values
- */
 export function formatTimeSpan(isoString: string): string {
   try {
     const date = new Date(isoString);
